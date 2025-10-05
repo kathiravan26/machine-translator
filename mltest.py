@@ -66,22 +66,46 @@ def prepare_data_tts(text_file, audio_file, num_classes):
 # Example Usage
 num_classes_stt = 28  # Example: 26 letters + space + blank
 num_classes_tts = 128  # Example: ASCII characters
-input_shape_stt = (None, 128, 1)  # Example: Mel spectrogram shape
-input_shape_tts = (None, 128, 1)  # Example: Mel spectrogram shape
+input_shape_stt = (128, 1)  # Mel spectrogram shape (time, features)
+input_shape_tts = (128, 1)  # Mel spectrogram shape (time, features)
 
 # Build and train STT model
 stt_model = build_stt_model(input_shape_stt, num_classes_stt)
 audio_file = 'sample_audio.wav'
-target_text = np.array([0, 1, 2, ..., 26])  # Example: Convert transcript to numerical representation
+
+# Example: Convert transcript to numerical representation (e.g., a-z=0-25, space=26, blank=27)
+# For demonstration, let's use a dummy target text
+target_text = np.array([0, 1, 2, 3, 4, 5, 26])  # Example: 'abcdef '
+
 features, target_text_onehot = prepare_data_stt(audio_file, target_text, num_classes_stt)
-stt_model.fit(features, target_text_onehot, epochs=10, batch_size=32)
+features = np.expand_dims(features, axis=0)  # Add batch dimension
+target_text_onehot = np.expand_dims(target_text_onehot, axis=0)  # Add batch dimension
+
+stt_model.fit(features, target_text_onehot, epochs=10, batch_size=1)
 
 # Build and train TTS model
 tts_model = build_tts_model(input_shape_tts, num_classes_tts)
 text_file = 'sample_text.txt'
 audio_file = 'sample_audio.wav'
-text_onehot, features = prepare_data_tts(text_file, audio_file, num_classes_tts)
-tts_model.fit(text_onehot, features, epochs=10, batch_size=32)
+
+# For demonstration, let's use a dummy text and audio
+with open(text_file, 'w') as f:
+    f.write('Hello, world!')
+
+# Convert text to integer indices (ASCII)
+with open(text_file, 'r') as f:
+    text = f.read()
+text_indices = np.array([ord(c) for c in text])  # Convert chars to ASCII codes
+
+text_onehot = tf.keras.utils.to_categorical(text_indices, num_classes=num_classes_tts)
+text_onehot = np.expand_dims(text_onehot, axis=0)  # Add batch dimension
+
+audio, sr = librosa.load(audio_file, sr=None)
+features = librosa.feature.melspectrogram(audio, sr=sr, n_fft=400, hop_length=160, n_mels=input_shape_tts[0])
+features = np.expand_dims(features, axis=-1)
+features = np.expand_dims(features, axis=0)  # Add batch dimension
+
+tts_model.fit(text_onehot, features, epochs=10, batch_size=1)
 
 # Save models
 stt_model.save('stt_model.h5')
@@ -90,15 +114,18 @@ tts_model.save('tts_model.h5')
 # Inference (STT)
 def predict_stt(audio_file, stt_model):
     audio, sr = librosa.load(audio_file, sr=None)
-    features = librosa.feature.melspectrogram(audio, sr=sr, n_fft=400, hop_length=160, n_mels=num_classes_stt)
+    features = librosa.feature.melspectrogram(audio, sr=sr, n_fft=400, hop_length=160, n_mels=input_shape_stt[0])
     features = np.expand_dims(features, axis=-1)
+    features = np.expand_dims(features, axis=0)  # Add batch dimension
     prediction = stt_model.predict(features)
     predicted_text = np.argmax(prediction, axis=-1)
     return predicted_text
 
 # Inference (TTS)
 def predict_tts(text, tts_model):
-    text_onehot = tf.keras.utils.to_categorical(text, num_classes=num_classes_tts)
+    text_indices = np.array([ord(c) for c in text])
+    text_onehot = tf.keras.utils.to_categorical(text_indices, num_classes=num_classes_tts)
+    text_onehot = np.expand_dims(text_onehot, axis=0)  # Add batch dimension
     prediction = tts_model.predict(text_onehot)
     return prediction
 

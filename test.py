@@ -6,6 +6,7 @@ import os
 from pydub import AudioSegment
 from pydub.playback import play
 import pyaudio
+import asyncio
 
 def recognize_speech_from_mic():
     recognizer = sr.Recognizer()
@@ -35,7 +36,7 @@ def detect_language(text):
 
 def translate_text(text, target_lang):
     translator = Translator()
-    translation = translator.translate(text, dest=target_lang)
+    translation = asyncio.run(translator.translate(text, dest=target_lang))
     print(f"Translated text: {translation.text}")
     return translation.text
 
